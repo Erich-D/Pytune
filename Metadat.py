@@ -5,6 +5,7 @@ import audio_metadata
 import mutagen
 import requests
 import json
+from time import sleep
 from pathlib import Path
 
 #metadata = audio_metadata.load('Z:\\Music\\Paradise City.wav')
@@ -12,16 +13,78 @@ from pathlib import Path
 #mf = 'Z:\\Music\\01 Turbo Lover.wma'
 
 def main():
-    p = 'Z:\\Music' #Music folder to organize
-    cleanMusic(p) #Run first to put loose files into new folders by artist
-    cleanAlbum(p)#Run second to organize artist folders by album
+    p = r'Z:\Music' #Music folder to organize
+    #pth = Path(p)
+    #cleanMusic(p) #Run first to put loose files into new folders by artist
+    #cleanAlbum(p)#Run second to organize artist folders by album
+    #//todo// use Path throughout
+    #//todo// get images
     
     
-    #print(mf[mf.rfind('.'):])
+def getArtistInfo(name):# gets a json text file with artist information and returns requests object
+    artist = htmlize(name)
+    url = 'https://www.theaudiodb.com/api/v1/json/1/search.php?s={}'.format(artist)
+    jsn = requests.get(url)
+    if jsn.status_code == 200:
+        info = json.loads(jsn.content)
+        if info['artists'] != None:
+            return jsn
+        else:
+            return None
+    else:
+        return None
+    pass
+
+def getArtistAlbums(name):
+    artist = htmlize(name)
+    url = 'https://www.theaudiodb.com/api/v1/json/1/searchalbum.php?s={}'.format(artist)
+    jsn = requests.get(url)
+    if jsn.status_code == 200:
+        info = json.loads(jsn.content)
+        if info['album'] != None:
+            return jsn
+        else:
+            return None
+    else:
+        return None
+    pass
+
+def getJson(path):
+    i = path.rfind('\\') + 1
+    direct = path[i:]
+    artist = '{}.jsn'.format(direct)
+    artistpath = os.path.join(path,artist)
+    artistalbums = '{}albums.json'.format(direct)
+    artalbumspath = os.path.join(path,artistalbums)
+    if os.path.isfile(artistpath):
+            #os.system("attrib +h {}".format(artistpath)) # Samba server is on ubuntu so this doesn't work running python script from windows machine 
+            #print(artistpath)
+            print('file exists')
+            pass
+    else:
+        jsonr = getArtistInfo(direct)
+        if jsonr:
+            with open(artistpath,'w') as f:
+                f.write(jsonr.text) 
+                sleep(.1)#just to slow requests to server a little
+        else:
+            print("No data found")
+    if os.path.isfile(artalbumspath):
+        pass
+    else:
+        jsonr = getArtistAlbums(direct)
+        if jsonr:
+            with open(artalbumspath,'w') as f:
+                f.write(jsonr.text) 
+                sleep(.1)#just to slow requests to server a little
+        else:
+            print("No data found")
+    pass
 
 #move loose files in artist folders into albums
 def cleanAlbum(folder):
     for d in dirs(folder):
+        getJson(d)
         for f in files(d):
             curpath = os.path.join(d,f)#current path of file
             dta = albumInfo(curpath)
@@ -30,7 +93,7 @@ def cleanAlbum(folder):
                     txt = cleanStr(dta['album'])
                     mvFile(d, txt, curpath, f)
                     #print(txt)
-                else:
+                else:#this was added because I found many .wav files don't have album data
                     if dta['artist'] and dta['title']:
                         txt = getAlbum(dta['artist'],dta['title'])
                         if txt:
@@ -38,6 +101,7 @@ def cleanAlbum(folder):
                             mvFile(d, album, curpath, f)
                     else:
                         print('No album Name')
+            #//todo// get album info here
             pass
     
 #place loose files in music folder into artist folders   
@@ -47,8 +111,9 @@ def cleanMusic(folder):
     for f in files(folder):
         curpath = os.path.join(folder,f)#current path of file
         dta = albumInfo(curpath)
-        artist = cleanStr(str(dta['artist']))
-        mvFile(folder,artist,curpath,f)  
+        if dta:
+            artist = cleanStr(str(dta['artist']))
+            mvFile(folder,artist,curpath,f)  
 
 def mvFile(parentfold, name, curpath, ftm):
     #//todo// check if song already exists
@@ -56,14 +121,19 @@ def mvFile(parentfold, name, curpath, ftm):
     tst = os.path.isdir(afpath)#test if artist folder exists
     if not tst:
         os.mkdir(afpath)#create folder if it doesn't exist
-    #move file to artist folder
-    Path(curpath).rename(os.path.join(afpath,ftm))
+    newpath = os.path.join(afpath,ftm)#complete path for file
+    if os.path.exists(newpath):#test if file already exists
+        os.remove(curpath)#remove file if it already exists in album folder
+        pass
+    else:
+        #move file to artist folder if it doesn't already exist
+        Path(curpath).rename(newpath)
      
 def getAlbum(artist, title):
     art = htmlize(artist)
     ttl = htmlize(title)
     url = 'https://theaudiodb.com/api/v1/json/1/searchtrack.php?s={}&t={}'.format(art, ttl)
-    jsn = requests.get(url.format(art,ttl))
+    jsn = requests.get(url)
     if jsn.status_code == 200:
         info = json.loads(jsn.content)
         if info['track'] != None:
@@ -73,9 +143,13 @@ def getAlbum(artist, title):
     else:
         return None
     
-def htmlize(txtstr):
+def htmlize(txtstr):#prepare string for web search
+    indx = txtstr.find('(')
+    if indx > 0:
+        txtstr = txtstr[0:indx]
+    txtstr = txtstr.strip()
     result = txtstr.lower()
-    return result.replace(' ','_')
+    return result.replace(' ','_').replace("'","")
     
 def cleanStr(textstr):
     #removes characters that can cause error in directory name
