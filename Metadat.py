@@ -14,12 +14,59 @@ from pathlib import Path
 
 def main():
     p = r'Z:\Music' #Music folder to organize
-    #pth = Path(p)
     #cleanMusic(p) #Run first to put loose files into new folders by artist
     #cleanAlbum(p)#Run second to organize artist folders by album
-    #//todo// use Path throughout
     #//todo// get images
-    
+    '''for d in dirs(p):
+        getArtistArt(Path(d))
+        print(d)'''
+    #album by id url=https://theaudiodb.com/api/v1/json/1/album.php?m={idAlbum}
+    #getAlbumArt(Path(p)/'Dire Straits')
+    """pth = Path(p)/'Dire Straits'/'Dire Straitsalbums.json'
+    with open(pth) as f:
+        info = json.loads(f.read())
+        for x in info['album']:
+            print(x['idAlbum']+' '+x['strAlbum'])"""
+
+def getAlbumArt(path):#path should be Path object with path to music folder + artist directory
+    #build list of albums with data
+    afp = "{}albums.json".format(path.stem)
+    f = open(path/afp)
+    info = json.loads(f.read())
+    alist = []
+    for x in info['album']:
+        alist.append(x['strAlbum'])
+    print(path.stem)
+    #get art for existing album folders in list
+    for d in dirs(path):
+        pd = Path(d)
+        if pd.stem in alist:
+            indx = alist.index(pd.stem)
+            ad = info['album'][indx]
+            print(ad)
+        print(pd)
+    f.close()
+    pass
+
+def getArtistArt(path):#path should be Path object with path to music folder + artist directory
+    afile = '{}.json'.format(path.stem)
+    pth = path/afile
+    if os.path.isfile(pth):
+        with open(pth) as f:
+            info = json.loads(f.read())
+            for x in info['artists'][0].values():
+                if x:
+                    if x.endswith('.jpg') or x.endswith('.png'):
+                        fname = Path(x).name
+                        ckpath = pth.parent/fname
+                        #print(fname)
+                        if not os.path.isfile(ckpath):
+                            img = requests.get(x)
+                            if img.status_code == 200:
+                                with open(ckpath, 'wb') as f:
+                                    f.write(img.content)
+                            sleep(2)
+    pass    
     
 def getArtistInfo(name):# gets a json text file with artist information and returns requests object
     artist = htmlize(name)
@@ -33,7 +80,7 @@ def getArtistInfo(name):# gets a json text file with artist information and retu
             return None
     else:
         return None
-    pass
+    del jsn
 
 def getArtistAlbums(name):
     artist = htmlize(name)
@@ -47,12 +94,12 @@ def getArtistAlbums(name):
             return None
     else:
         return None
-    pass
+    del jsn
 
 def getJson(path):
     i = path.rfind('\\') + 1
     direct = path[i:]
-    artist = '{}.jsn'.format(direct)
+    artist = '{}.json'.format(direct)
     artistpath = os.path.join(path,artist)
     artistalbums = '{}albums.json'.format(direct)
     artalbumspath = os.path.join(path,artistalbums)
@@ -106,8 +153,6 @@ def cleanAlbum(folder):
     
 #place loose files in music folder into artist folders   
 def cleanMusic(folder):
-    #this will put files I did to develope code to handle in 'none' folder
-    #//todo// add .wma and .m4a support  **done
     for f in files(folder):
         curpath = os.path.join(folder,f)#current path of file
         dta = albumInfo(curpath)
@@ -142,6 +187,7 @@ def getAlbum(artist, title):
             return None
     else:
         return None
+    del jsn
     
 def htmlize(txtstr):#prepare string for web search
     indx = txtstr.find('(')
